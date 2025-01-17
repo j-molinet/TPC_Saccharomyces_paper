@@ -7,6 +7,8 @@ This study adds a powerful experimental evolution angle to climate change resear
 
 The analyses were performed using R version 4.3.1.
 
+![Experimental design](S1_Figure.pdf "Figure S1")
+
 ## Content
 - `Section1.R`: [Breve descripción de lo que hace el script].
 - `Section2.R`: [Breve descripción de lo que hace el script].
