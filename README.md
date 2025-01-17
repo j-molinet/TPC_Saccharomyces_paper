@@ -7,7 +7,11 @@ This study adds a powerful experimental evolution angle to climate change resear
 
 The analyses were performed using R version 4.3.1.
 
+## Experimental design
+Figure S1
+
 ![Experimental design](S1_Figure.jpeg "Figure S1")
+
 (A) Phenotypic characterization of Saccharomyces strains at different temperatures. 
 (B) Experimental evolution approach. 
 (C) Evaluation of thermal performance curve evolution
