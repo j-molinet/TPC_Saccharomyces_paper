@@ -1,0 +1,722 @@
+---
+title: "Experimental evolution of TPCs: Cold-tolerant species evolve larger fitness gains at higher temperatures but do not reach the warm-tolerant species"
+author: "Jennifer Molinet"
+date: "2025-02-14"
+output: html_document
+---
+
+To test if and how TPCs evolve across the yeast genus, we performed an adaptive evolution experiment in which we gradually increased temperature from 25 °C to 40 °C every 50 generations or until strains went extinct.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Libraries**
+
+```{r}
+suppressMessages(library(tidyverse))
+library(ggplot2)
+library(grid)
+suppressMessages(library(viridis))
+library(patchwork)
+library(hrbrthemes)
+suppressMessages(library(igraph))
+library(ggraph)
+library(colormap)
+library(DiagrammeR)
+library(scales)
+library(ggbreak)
+library(reshape2)
+suppressMessages(library(lme4))
+suppressMessages(library(cowplot))
+```
+
+**Directories**
+
+```{r}
+output_dir <- "../results/Section2/"
+input_dir <- "../data/Section2"
+```
+
+Overall, cold-tolerant species did not survive beyond 34 °C, whereas warm-tolerant species reached temperatures between 34 and 40 °C, with both S. cerevisiae strains surviving the maximum temperature of 40 °C after 600 generations.
+
+Plotting figure 3A
+
+```{r figure3A, fig.width=12, fig.height=6}
+ev2 <- ggplot()+
+  #SE2
+  geom_rect(aes(xmin=0,xmax=1,ymin=0,ymax=1),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=0,ymax=1),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=2,xmax=3,ymin=0,ymax=1),
+            fill="#ffb2b2", alpha=1,color="black")+ #29
+  geom_rect(aes(xmin=3,xmax=4,ymin=0,ymax=1),
+            fill="#ff9999", alpha=1,color="black")+ #30
+  geom_rect(aes(xmin=4,xmax=5,ymin=0,ymax=1),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  #SE1
+  geom_rect(aes(xmin=0,xmax=1,ymin=1,ymax=2),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=1,ymax=2),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=1,ymax=2),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=1,ymax=2),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=1,ymax=2),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=1,ymax=2),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  #SU1
+  geom_rect(aes(xmin=0,xmax=1,ymin=2,ymax=3),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=2,ymax=3),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=2,ymax=3),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=2,ymax=3),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=2,ymax=3),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  #SU2
+  geom_rect(aes(xmin=0,xmax=1,ymin=3,ymax=4),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=3,ymax=4),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=3,ymax=4),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=3,ymax=4),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=3,ymax=4),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  #SA2
+  geom_rect(aes(xmin=0,xmax=1,ymin=4,ymax=5),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=4,ymax=5),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=4,ymax=5),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=4,ymax=5),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=4,ymax=5),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  #SK1
+  geom_rect(aes(xmin=0,xmax=1,ymin=5,ymax=6),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=5,ymax=6),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=5,ymax=6),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=5,ymax=6),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  #SK2
+  geom_rect(aes(xmin=0,xmax=1,ymin=6,ymax=7),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=6,ymax=7),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=6,ymax=7),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=6,ymax=7),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  #SJ1
+  geom_rect(aes(xmin=0,xmax=1,ymin=7,ymax=8),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=7,ymax=8),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=7,ymax=8),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=7,ymax=8),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=7,ymax=8),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=7,ymax=8),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=7,ymax=8),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  #SJ2
+  geom_rect(aes(xmin=0,xmax=1,ymin=8,ymax=9),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=8,ymax=9),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=8,ymax=9),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=8,ymax=9),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=8,ymax=9),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=8,ymax=9),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=8,ymax=9),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  #SM1
+  geom_rect(aes(xmin=0,xmax=1,ymin=9,ymax=10),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=9,ymax=10),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=9,ymax=10),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=9,ymax=10),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=9,ymax=10),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=9,ymax=10),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  #SM2
+  geom_rect(aes(xmin=0,xmax=1,ymin=10,ymax=11),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=10,ymax=11),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=10,ymax=11),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=10,ymax=11),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=10,ymax=11),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=10,ymax=11),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=10,ymax=11),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  geom_rect(aes(xmin=9,xmax=10,ymin=10,ymax=11),
+            fill="#ff0000", alpha=1,color="black")+ #36
+  #SP1
+  geom_rect(aes(xmin=0,xmax=1,ymin=11,ymax=12),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=11,ymax=12),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=11,ymax=12),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=11,ymax=12),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=11,ymax=12),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=11,ymax=12),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=11,ymax=12),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  #SP2
+  geom_rect(aes(xmin=0,xmax=1,ymin=12,ymax=13),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=12,ymax=13),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=12,ymax=13),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=12,ymax=13),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=12,ymax=13),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=12,ymax=13),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=12,ymax=13),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  geom_rect(aes(xmin=9,xmax=10,ymin=12,ymax=13),
+            fill="#ff0000", alpha=1,color="black")+ #36
+  #SC
+  geom_rect(aes(xmin=0,xmax=1,ymin=13,ymax=14),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=13,ymax=14),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=13,ymax=14),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=13,ymax=14),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=13,ymax=14),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=13,ymax=14),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=13,ymax=14),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  geom_rect(aes(xmin=9,xmax=10,ymin=13,ymax=14),
+            fill="#ff0000", alpha=1,color="black")+ #36
+  #SC1
+  geom_rect(aes(xmin=0,xmax=1,ymin=14,ymax=15),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=14,ymax=15),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=14,ymax=15),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=14,ymax=15),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=14,ymax=15),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=14,ymax=15),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=14,ymax=15),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  geom_rect(aes(xmin=9,xmax=10,ymin=14,ymax=15),
+            fill="#ff0000", alpha=1,color="black")+ #36
+  geom_rect(aes(xmin=10,xmax=11,ymin=14,ymax=15),
+            fill="#e50000", alpha=1,color="black")+ #37
+  geom_rect(aes(xmin=11,xmax=12,ymin=14,ymax=15),
+            fill="#cc0000", alpha=1,color="black")+ #38
+  geom_rect(aes(xmin=12,xmax=13,ymin=14,ymax=15),
+            fill="#b20000", alpha=1,color="black")+ #39
+  geom_rect(aes(xmin=13,xmax=14,ymin=14,ymax=15),
+            fill="#990000", alpha=1,color="black")+ #40
+  #SC2
+  geom_rect(aes(xmin=0,xmax=1,ymin=15,ymax=16),
+            fill="#ffe5e5", alpha=1,color="black")+ #25
+  geom_rect(aes(xmin=1,xmax=2,ymin=15,ymax=16),
+            fill="#ffcccc", alpha=1,color="black")+ #28
+  geom_rect(aes(xmin=4,xmax=5,ymin=15,ymax=16),
+            fill="#ff7f7f", alpha=1,color="black")+ #31
+  geom_rect(aes(xmin=5,xmax=6,ymin=15,ymax=16),
+            fill="#ff6666", alpha=1,color="black")+ #32
+  geom_rect(aes(xmin=6,xmax=7,ymin=15,ymax=16),
+            fill="#ff4c4c", alpha=1,color="black")+ #33
+  geom_rect(aes(xmin=7,xmax=8,ymin=15,ymax=16),
+            fill="#ff3232", alpha=1,color="black")+ #34
+  geom_rect(aes(xmin=8,xmax=9,ymin=15,ymax=16),
+            fill="#ff1919", alpha=1,color="black")+ #35
+  geom_rect(aes(xmin=9,xmax=10,ymin=15,ymax=16),
+            fill="#ff0000", alpha=1,color="black")+ #36
+  geom_rect(aes(xmin=10,xmax=11,ymin=15,ymax=16),
+            fill="#e50000", alpha=1,color="black")+ #37
+  geom_rect(aes(xmin=11,xmax=12,ymin=15,ymax=16),
+            fill="#cc0000", alpha=1,color="black")+ #38
+  geom_rect(aes(xmin=12,xmax=13,ymin=15,ymax=16),
+            fill="#b20000", alpha=1,color="black")+ #39
+  geom_rect(aes(xmin=13,xmax=14,ymin=15,ymax=16),
+            fill="#990000", alpha=1,color="black")+ #40
+  # Strain label
+  annotate("text",x=-0.5,y=0.5,label="Se-6",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=1.5,label="Se-1",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=2.5,label="Su-4",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=3.5,label="Su-2",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=4.5,label="Sa-4",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=5.5,label="Sk-1",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=6.5,label="Sk-4",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=7.5,label="Sj-2",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=8.5,label="Sj-1",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=9.5,label="Sm-1",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=10.5,label="Sm-6",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=11.5,label="Sp-5",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=12.5,label="Sp-8",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=13.5,label="Sc-2",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=14.5,label="Sc-8",fontface="bold",size=4)+
+  annotate("text",x=-0.5,y=15.5,label="Sc-13",fontface="bold",size=4)+
+  # Temperature
+  annotate("text",x=0.5,y=-0.5,label="25°C",fontface="bold",size=4)+
+  annotate("text",x=1.5,y=-0.5,label="28°C",fontface="bold",size=4)+
+  annotate("text",x=2.5,y=-0.5,label="29°C",fontface="bold",size=4)+
+  annotate("text",x=3.5,y=-0.5,label="30°C",fontface="bold",size=4)+
+  annotate("text",x=4.5,y=-0.5,label="31°C",fontface="bold",size=4)+
+  annotate("text",x=5.5,y=-0.5,label="32°C",fontface="bold",size=4)+
+  annotate("text",x=6.5,y=-0.5,label="33°C",fontface="bold",size=4)+
+  annotate("text",x=7.5,y=-0.5,label="34°C",fontface="bold",size=4)+
+  annotate("text",x=8.5,y=-0.5,label="35°C",fontface="bold",size=4)+
+  annotate("text",x=9.5,y=-0.5,label="36°C",fontface="bold",size=4)+
+  annotate("text",x=10.5,y=-0.5,label="37°C",fontface="bold",size=4)+
+  annotate("text",x=11.5,y=-0.5,label="38°C",fontface="bold",size=4)+
+  annotate("text",x=12.5,y=-0.5,label="39°C",fontface="bold",size=4)+
+  annotate("text",x=13.5,y=-0.5,label="40°C",fontface="bold",size=4)+
+  # Generations
+  annotate("text",x=5.5,y=0.5,label="250 gen",fontface="bold",size=3)+
+  annotate("text",x=8.5,y=1.5,label="350 gen",fontface="bold",size=3)+
+  annotate("text",x=7.5,y=2.5,label="250 gen",fontface="bold",size=3)+
+  annotate("text",x=7.5,y=3.5,label="250 gen",fontface="bold",size=3)+
+  annotate("text",x=7.5,y=4.5,label="250 gen",fontface="bold",size=3)+
+  annotate("text",x=6.5,y=5.5,label="200 gen",fontface="bold",size=3)+
+  annotate("text",x=6.5,y=6.5,label="250 gen",fontface="bold",size=3)+
+  annotate("text",x=9.5,y=7.5,label="350 gen",fontface="bold",size=3)+
+  annotate("text",x=9.5,y=8.5,label="350 gen",fontface="bold",size=3)+
+  annotate("text",x=8.5,y=9.5,label="300 gen",fontface="bold",size=3)+
+  annotate("text",x=10.5,y=10.5,label="400 gen",fontface="bold",size=3)+
+  annotate("text",x=9.5,y=11.5,label="350 gen",fontface="bold",size=3)+
+  annotate("text",x=10.5,y=12.5,label="400 gen",fontface="bold",size=3)+
+  annotate("text",x=10.5,y=13.5,label="400 gen",fontface="bold",size=3)+
+  annotate("text",x=14.5,y=14.5,label="600 gen",fontface="bold",size=3)+
+  annotate("text",x=14.5,y=15.5,label="600 gen",fontface="bold",size=3)+
+  theme_bw() +
+  labs(x ='Temperature', y="Strain")+
+  theme(axis.ticks = element_blank(), axis.text.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.x = element_text(size = 14,face="bold"),
+        axis.title.y = element_text( size = 14,face="bold"))+
+  scale_y_continuous(breaks = seq(2,16,2))+
+  scale_x_continuous(breaks = seq(0,14,2))
+
+ev2
+ggsave(filename = file.path(output_dir, "Figure_3A.tiff"), plot = ev2, width = 12, height = 6, dpi = 300)
+```
+
+
+**Loading data**
+```{r}
+file_path <- file.path(input_dir, "Kinetic_parameters.txt")
+d <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+d$Species <- ordered(d$Species, levels = c("SE", "SU", "SA", "SK", "SJ","SM","SP","SC"))
+head(d)
+```
+
+**Determining relative fitness between evolved population and ancestral strains**
+
+We then compared the evolution of relative fitness (difference in maximum growth rate between evolved populations and their ancestors) of the populations evolved under constant (25 °C, condition C) and increasing temperature (condition I) 
+
+Plotting figure 3B
+
+```{r}
+d1 <- d %>%
+  dplyr::group_by(Strain,Strain_2,Condition,Line,Generation,Temperature,Highlight,Species, Line.1) %>%
+  dplyr::summarise(sd_rate = sd(Rate_fitness),
+                   rate = mean(Rate_fitness),
+                   sd_OD = sd(OD_fitness),
+                   OD = mean(OD_fitness)) %>%
+  ungroup()
+d1 <- as.data.frame(d1)
+
+d2 <- d1 %>% select(Strain,Strain_2,Condition,Line,Generation,Temperature,Highlight,Species,Line.1,rate) %>%
+  dcast(Strain+Strain_2+Condition+Line+Generation+Highlight+Species+Line.1~Temperature, value.var = "rate")
+
+d3 <- d1 %>% select(Strain,Strain_2,Condition,Line,Generation,Temperature,Highlight,Species,Line.1,sd_rate) %>%
+  dcast(Strain+Strain_2+Condition+Line+Generation+Highlight+Species+Line.1~Temperature, value.var = "sd_rate")
+
+Temp_name <- c("Strain","Strain_number","Condition","Line","Generation","Highlight","Species","Line number" ,"Control_temp","Treatment_temp") 
+colnames(d2) <- Temp_name
+Temp_name_sd <- c("Strain","Strain_number","Condition","Line","Generation","Highlight","Species","Line number","Control_temp_sd","Treatment_temp_sd") 
+colnames(d3) <- Temp_name_sd
+
+
+Control_temp_sd <- d3 %>% select(Control_temp_sd) %>% unlist()
+Treatment_temp_sd <- d3 %>% select(Treatment_temp_sd) %>% unlist()
+d2$Control_temp_sd <- Control_temp_sd
+d2$Treatment_temp_sd <- Treatment_temp_sd
+d2 <- d2 %>% mutate_if(is.numeric, ~round(., 4))
+d2$Specie <- ordered(d2$Specie, levels = c("SE","SU","SA","SK","SJ","SM","SP","SC"))
+
+d2 <- d2 %>% filter(Condition != "Ancestral")
+
+d2_control <- d2 %>% filter (Condition == "Control")
+
+d2_treatment <- d2 %>% filter (Condition == "Treatment")
+```
+
+```{r figure3B, fig.width=10, fig.height=6}
+all4 <- d2 %>% ggplot(aes(x=Control_temp, y=Treatment_temp, col=Species, shape=Condition)) +
+  geom_point(size=5, alpha=0.8)+
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_vline(xintercept = 0,linetype = 2)+
+  xlim(c(-0.10,0.10))+
+  ylim(c(-0.12,0.12))+
+  scale_color_manual(values = c("#08519C","#88419D","#238B45","#2B8CBE","#737373","#980043","#D94801","#CB181D"),
+                     labels = expression(italic("S. eubayanus"),italic("S. uvarum"),italic("S. arboricola"),italic("S. kudriavzevii"),italic("S. jurei"),italic("S. mikatae"),italic("S. paradoxus"),italic("S. cerevisiae")),
+                     name= "Species") +
+  scale_shape_manual(values = c(16,17),
+                     name = "Evolution condition")+
+  ylab("Relative fitness at final evolution temperature") +
+  xlab("Relative fitness at 25°C") +
+  annotate("text",x=-0.10, y=0.12,label="Increase at higher temp.",size=4,hjust = 0, vjust = 1)+
+  annotate("text",x=-0.10, y=0.11,label="decrease at 25°C.",size=4,hjust = 0, vjust = 1)+
+  annotate("text",x=0.10, y=-0.11,label="Increase at 25°C",size=4,hjust = 1, vjust = 0)+
+  annotate("text",x=0.10, y=-0.12,label="decrease at higher temp.",size=4,hjust = 1, vjust = 0)+
+  annotate("text",x=0.10, y=0.12,label="Increase at both temp.",size=4,hjust = 1, vjust = 1)+
+  annotate("text",x=-0.10, y=-0.12,label="Decrease at both temp.",size=4,hjust = 0, vjust = 0)+
+  theme_bw()+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14, angle=90,hjust = 0.5),
+        legend.text = element_text(size = 14),legend.title = element_text(size = 14, face ="bold")) 
+
+
+all4
+ggsave(filename = file.path(output_dir, "Figure_3B.tiff"), plot = all4, width = 10, height = 6, dpi = 300)
+```
+
+Of the 64 I-populations, we observed 35 I-populations statistically significantly increasing in relative fitness at higher temperatures, of which 13 also decreased at 25 °C relative to their respective ancestral strains, while of the 64 C-populations, 6 C-populations significantly increased in relative fitness at 25 ºC. Of the 128 C and I-populations, four populations performed poorly after evolution at both constant and higher temperatures, and no populations showed a fitness gain in both constant and higher temperatures.
+
+Linear mixed model:
+The model explaining most of the variation in relative fitness included the interaction between temperature and evolution condition (C vs. I).
+```{r}
+reduced_model <- lmer(Rate_fitness ~ 1 + (1|Species/Highlight), data = d, REML = FALSE)
+null_model1 <- lmer(Rate_fitness ~ Condition + (1|Species/Highlight), data = d, REML = FALSE)
+null_model2 <- lmer(Rate_fitness ~ Temperature + (1|Species/Highlight), data = d, REML = FALSE)
+full_model3 <- lmer(Rate_fitness ~ Temperature+Condition + (1|Species/Highlight), data = d, REML = FALSE)
+full_model7 <- lmer(Rate_fitness ~ Temperature*Condition + (1|Species/Highlight), data = d, REML = FALSE)
+
+anova(reduced_model, null_model1, null_model2,full_model3,full_model7)
+
+full_model7 <- lmer(Rate_fitness ~ Temperature*Condition + (1|Species/Highlight), data = d)
+summary(full_model7)
+```
+
+Populations evolved under increasing temperature (I-populations) reached a higher relative fitness by the end of the evolution experiment than the populations evolved under constant temperature (C-populations) when evaluated at the higher, strain-specific final evolution temperature.
+
+Plotting figure 3C
+
+```{r figure3C, fig.width=6, fig.height=6}
+P4 <- d %>% 
+  filter(Condition != "Ancestral") %>%
+  ggplot(aes(x=Condition, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Evolution condition") +
+  ggtitle("Growth Rate")+
+  theme_bw()+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold",hjust = 0.5),
+        legend.position = "none",
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+P4
+ggsave(filename = file.path(output_dir, "Figure_3C.tiff"), plot = P4, width = 6, height = 6, dpi = 300)
+```
+
+
+We then evaluated relative fitness at the species level and tested for differences between cold-tolerant species (S. eubayanus, S. arboricola, S. kudriavzevii), warm-tolerant species (S. mikatae, S. paradoxus, S. cerevisiae), and species with an intermediate thermal profile (S. jurei, S. uvarum). We found differences in relative fitness between species after evolving populations under increasing temperature.
+
+Plotting figure 3D
+```{r figure3D, fig.width=6, fig.height=6}
+
+temp.labs <- c("Higher temp.", "25°C")
+names(temp.labs) <- c("Treatment", "Control")
+
+P1 <- d %>% 
+  filter(Condition != "Ancestral") %>%
+  ggplot(aes(x=Species, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("") +
+  ggtitle("Growth Rate")+
+  theme_bw()+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        legend.position = "bottom",
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+P1
+ggsave(filename = file.path(output_dir, "Figure_3D.tiff"), plot = P1, width = 6, height = 6, dpi = 300)
+```
+
+Plotting figure S8
+
+```{r figureS8, fig.width=12, fig.height=18}
+SE <- d %>% 
+  filter(Condition != "Ancestral", Species == "SE") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. eubayanus")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+SU <- d %>% 
+  filter(Condition != "Ancestral", Species == "SU") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. uvarum")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+SA <- d %>% 
+  filter(Condition != "Ancestral", Species == "SA") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. arboricola")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+SK <- d %>% 
+  filter(Condition != "Ancestral", Species == "SK") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. kudriavzevii")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+SJ <- d %>% 
+  filter(Condition != "Ancestral", Species == "SJ") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. jurei")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+SM <- d %>% 
+  filter(Condition != "Ancestral", Species == "SM") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. mikatae")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+SP <- d %>% 
+  filter(Condition != "Ancestral", Species == "SP") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. paradoxus")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+SC <- d %>% 
+  filter(Condition != "Ancestral", Species == "SC") %>%
+  ggplot(aes(x=Strain_2, y=Rate_fitness, fill=Condition)) +
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_boxplot(lwd=0.2) +
+  scale_fill_manual(values = c("#4575B4","#D6604D")) +
+  ylab("Relative fitness") +
+  xlab("Strain") +
+  ggtitle("S. cerevisiae")+
+  theme_bw()+
+  scale_y_continuous(limits = c(-0.1,0.12), breaks = seq(-0.1,0.12,0.04))+
+  guides(fill=guide_legend(title = "Evolution condition"))+
+  theme(axis.title.y = element_text( size = 14),
+        axis.title.x = element_text( size = 14),
+        axis.text.x = element_text(size = 14), 
+        axis.text.y = element_text(size = 14),
+        plot.title = element_text(size = 16,face = "bold.italic",hjust = 0.5),
+        legend.text = element_text(size = 14), legend.title = element_text(size = 16),
+        strip.background = element_rect(colour="black", fill="white", linewidth=1, linetype="solid"),
+        strip.text.x = element_text(size=12,face="bold"),
+        strip.text.y = element_text(size=12,face="bold"))+
+  facet_grid(~Temperature,labeller = labeller(Temperature = temp.labs))
+
+Curve1 <- ggarrange(SE,SU,SA,SK,SJ,SM,SP,SC, 
+                    labels = c("A", "B","C","D","E","F","G","H"),
+                    ncol = 2, nrow = 4, common.legend = TRUE, legend = "bottom")
+
+figureS8 <- annotate_figure(Curve1,
+                top = text_grob("Fitness", color = "black", face = "bold", size = 16))
+figureS8
+ggsave(filename = file.path(output_dir, "Figure_S8.tiff"), plot = figureS8, width = 12, height = 18, dpi = 300)
+```
+
+Plotting figure 3
+
+```{r figure3, fig.width=12, fig.height=18}
+figure3 <- ggdraw() +
+  draw_plot(ev2, 0.05, .7, 0.9, .3) +
+  draw_plot(all4, 0.05, 0.35, .9, .35) +
+  draw_plot(P4, 0, 0.05, .45, .30) +
+  draw_plot(P1, 0.45, 0, .55, .35) +
+  draw_plot_label(c("A", "B", "C","D"), c(0, 0, 0, 0.45), c(1, 0.7, 0.35, 0.35), size = 15)
+figure3
+
+ggsave(filename = file.path(output_dir, "Figure_3.tiff"), plot = figure3, width = 12, height = 18, dpi = 300)
+```
+
+
+On average, I-populations of *S. eubayanus*, *S. uvarum*, *S. arboricola*, *S. kudriavzevii*, *S. jurei*, and *S. mikatae* significantly improved in relative fitness at higher temperatures, but populations of the more warm-tolerant species *S. paradoxus* and *S. cerevisiae* did not. 
+
+
+  
+  
+  

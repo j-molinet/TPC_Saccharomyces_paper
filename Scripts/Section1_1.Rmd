@@ -25,8 +25,8 @@ library(lme4)
 **Directories**
 
 ```{r}
-output_dir <- "results/Section1/"
-input_dir <- "data/Section1"
+output_dir <- "../results/Section1/"
+input_dir <- "../data/Section1"
 ```
 
 **Loading data**
