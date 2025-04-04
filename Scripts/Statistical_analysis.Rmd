@@ -1,0 +1,1213 @@
+---
+title: "Statistical Analysis"
+author: "Jennifer Molinet"
+date: "2025-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The different statistical analyses performed are presented below.
+
+**Libraries**
+
+```{r}
+library(easynls)
+library(reshape2)
+library(ggplot2)
+suppressMessages(library(plyr))
+suppressMessages(library(tidyverse))
+suppressMessages(library(ggpubr))
+suppressMessages(library(car))
+library(dunn.test)
+library(glmmTMB)
+library(lattice)
+suppressMessages(library(DHARMa))
+```
+
+**SECTION 1**
+
+```{r}
+output_dir <- "../results/Section1/"
+input_dir <- "../data/Section1"
+```
+
+**Loading data**
+```{r}
+file_path <- file.path(input_dir, "Kinetic_parameters.txt")
+d <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+head(d)
+```
+**Analyzing growth rates at different temperatures**
+
+```{r}
+d$Specie <- ordered(d$Specie, levels = c("SE","SU","SA","SK","SJ","SM","SP","SC"))
+d$Temperature <- as.character(d$Temperature)
+```
+
+We first analyzed whether there are significant differences between the growth rates for each temperature. As the residuals do not follow a normal distribution and the data do not present a homogeneous variance for all comparisons, we performed Kruskal-Wallis test with Dunn's test for multiple comparisons.
+
+```{r}
+d_16 <- d %>% filter(Temperature == "16")
+d_18 <- d %>% filter(Temperature == "18")
+d_20 <- d %>% filter(Temperature == "20")
+d_23 <- d %>% filter(Temperature == "23")
+d_25 <- d %>% filter(Temperature == "25")
+d_28 <- d %>% filter(Temperature == "28")
+d_31 <- d %>% filter(Temperature == "31")
+d_34 <- d %>% filter(Temperature == "34")
+d_37 <- d %>% filter(Temperature == "37")
+d_40 <- d %>% filter(Temperature == "40")
+
+my_anova_16 <- kruskal.test(Rate ~ Specie, data = d_16)
+my_anova_18 <- kruskal.test(Rate ~ Specie, data = d_18)
+my_anova_20 <- kruskal.test(Rate ~ Specie, data = d_20)
+my_anova_23 <- kruskal.test(Rate ~ Specie, data = d_23)
+my_anova_25 <- kruskal.test(Rate ~ Specie, data = d_25)
+my_anova_28 <- kruskal.test(Rate ~ Specie, data = d_28)
+my_anova_31 <- kruskal.test(Rate ~ Specie, data = d_31)
+my_anova_34 <- kruskal.test(Rate ~ Specie, data = d_34)
+my_anova_37 <- kruskal.test(Rate ~ Specie, data = d_37)
+my_anova_40 <- kruskal.test(Rate ~ Specie, data = d_40)
+
+my_anova_16
+my_anova_18
+my_anova_20
+my_anova_23
+my_anova_25
+my_anova_28
+my_anova_31
+my_anova_34
+my_anova_37
+my_anova_40
+```
+
+```{r}
+# Lista de temperaturas
+temperaturas <- c(16, 18, 20, 23, 25, 28, 31, 34, 37, 40)
+
+# Lista para almacenar los resultados
+resultados_lista <- list()
+
+# Loop sobre cada temperatura
+for (temp in temperaturas) {
+  data_name <- paste0("d_", temp)
+  
+  if (exists(data_name)) {
+    d <- get(data_name)
+    
+    # Aplicar Dunn test
+    resultado <- dunn.test(d$Rate, d$Specie, method = "BH", table = FALSE)
+    
+    # Extraer los nombres de los grupos comparados
+    comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+    
+    # Extraer los p-values ajustados
+    pvalues <- resultado$P.adjusted
+    
+    # Crear el data frame con los resultados
+    tabla_resultados <- data.frame(
+      Grupo1 = comparaciones$V1,
+      Grupo2 = comparaciones$V2
+    )
+    
+    # Agregar la columna de P-value con el nombre de la temperatura
+    tabla_resultados[[paste0("P_value_", temp)]] <- pvalues
+    
+    # Guardar en la lista
+    resultados_lista[[as.character(temp)]] <- tabla_resultados
+  }
+}
+
+# Unir todas las tablas de resultados en un solo data frame
+tabla_resultados_final <- Reduce(function(x, y) merge(x, y, by = c("Grupo1", "Grupo2"), all = TRUE), resultados_lista)
+
+# Ver los primeros resultados
+head(tabla_resultados_final)
+
+# Definir el nombre del archivo de salida
+output_file <- file.path(output_dir, "DunnTest_Results_1.csv")
+
+# Guardar la tabla en formato CSV
+write.csv(tabla_resultados_final, file = output_file, row.names = FALSE)
+```
+We then analyzed the growth rate by species.
+
+```{r}
+
+# Leer los datos
+d <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+d$Specie <- ordered(d$Specie, levels = c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC"))
+d$Temperature <- as.character(d$Temperature)
+
+# Lista de especies
+especies <- c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC")
+
+# Lista para almacenar resultados
+resultados_kruskal <- list()
+
+# Loop para Kruskal-Wallis
+for (esp in especies) {
+  datos <- d %>% filter(Specie == esp)
+  
+  # Verificar si hay suficientes datos para el test
+  if (length(unique(datos$Strain)) > 1) {
+    test_result <- kruskal.test(Rate ~ Strain, data = datos)
+    
+    # Guardar resultados en lista
+    resultados_kruskal[[esp]] <- data.frame(
+      Especie = esp,
+      Chi_squared = test_result$statistic,
+      df = test_result$parameter,
+      P_value = test_result$p.value
+    )
+  } else {
+    warning(paste("No se puede realizar Kruskal-Wallis para", esp, "por falta de datos suficientes."))
+  }
+}
+
+# Convertir la lista en un data frame
+tabla_resultados_kruskal <- do.call(rbind, resultados_kruskal)
+
+# Definir el nombre del archivo de salida
+output_file_kruskal <- file.path(output_dir, "KruskalWallis_Results_Species.csv")
+
+# Guardar la tabla en formato CSV
+write.csv(tabla_resultados_kruskal, file = output_file_kruskal, row.names = FALSE)
+
+# Ver los primeros resultados
+head(tabla_resultados_kruskal)
+
+```
+
+```{r}
+
+# Leer los datos
+d <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+d$Specie <- ordered(d$Specie, levels = c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC"))
+d$Temperature <- as.character(d$Temperature)
+
+# Lista de especies
+especies <- c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC")
+
+# Lista para almacenar resultados
+resultados_kruskal <- list()
+
+# Loop para Kruskal-Wallis
+for (esp in especies) {
+  datos <- d %>% filter(Specie == esp)
+  
+  # Verificar si hay suficientes datos para el test
+  if (length(unique(datos$Strain)) > 1) {
+    test_result <- kruskal.test(Rate ~ Temperature, data = datos)
+    
+    # Guardar resultados en lista
+    resultados_kruskal[[esp]] <- data.frame(
+      Especie = esp,
+      Chi_squared = test_result$statistic,
+      df = test_result$parameter,
+      P_value = test_result$p.value
+    )
+  } else {
+    warning(paste("No se puede realizar Kruskal-Wallis para", esp, "por falta de datos suficientes."))
+  }
+}
+
+# Convertir la lista en un data frame
+tabla_resultados_kruskal <- do.call(rbind, resultados_kruskal)
+
+# Definir el nombre del archivo de salida
+output_file_kruskal <- file.path(output_dir, "KruskalWallis_Results_Temperature.csv")
+
+# Guardar la tabla en formato CSV
+write.csv(tabla_resultados_kruskal, file = output_file_kruskal, row.names = FALSE)
+
+# Ver los primeros resultados
+head(tabla_resultados_kruskal)
+
+```
+
+
+```{r}
+
+# Leer los datos
+d <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+d$Specie <- ordered(d$Specie, levels = c("SE", "SU", "SA", "SK", "SM", "SP", "SC"))
+d$Temperature <- as.character(d$Temperature)
+
+# Lista de especies
+especies <- c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC")
+
+# Bucle para realizar Dunn's test para cada especie y guardar los resultados en tablas separadas
+for (esp in especies) {
+  datos <- d %>% filter(Specie == esp)  # Filtrar los datos para la especie actual
+  
+  # Convertir 'Strain' en factor
+  datos$Strain <- as.factor(datos$Strain)
+
+  # Verificar si hay al menos dos grupos con más de una observación
+  if (length(unique(datos$Strain)) > 1 && all(table(datos$Strain) > 1)) {
+    
+    # Ejecutar Dunn's test
+    resultado <- dunn.test(datos$Rate, datos$Strain, method = "BH", table = FALSE)
+    
+    # Verificar si hay resultados de comparaciones
+    if (length(resultado$comparisons) > 0) {
+      comparaciones <- do.call(rbind, strsplit(resultado$comparisons, " - "))
+      
+      # Si solo hay una comparación, convertir a matriz
+      if (is.null(dim(comparaciones))) {
+        comparaciones <- matrix(comparaciones, ncol = 2, byrow = TRUE)
+      }
+
+      # Crear un data frame con los resultados
+      tabla_resultados <- data.frame(
+        Grupo1 = comparaciones[, 1],
+        Grupo2 = comparaciones[, 2],
+        P_value = resultado$P.adjusted
+      )
+      
+      # Mostrar los resultados en la consola
+      print(paste("Resultados de Dunn's test para", esp))
+      print(tabla_resultados)
+      
+      # Guardar la tabla en un archivo CSV con el nombre de la especie
+      output_file <- file.path(output_dir, paste0("DunnTest_", esp, "_Results.csv"))
+      write.csv(tabla_resultados, file = output_file, row.names = FALSE)
+      
+      # Mensaje de confirmación
+      message(paste("Resultados de Dunn's test para", esp, "guardados en", output_file))
+      
+    } else {
+      warning(paste("No hay comparaciones para", esp))
+    }
+  } else {
+    warning(paste("No se puede realizar Dunn's test para", esp, "debido a grupos insuficientes"))
+  }
+}
+
+```
+
+
+Finally, we analyzed the growth rate considering temperature and species as groups.
+
+```{r}
+# Leer los datos
+d <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+d$Specie <- ordered(d$Specie, levels = c("SE", "SU", "SA", "SK", "SM", "SP", "SC"))
+d$Temperature <- as.character(d$Temperature)
+
+my_anova_temp <- kruskal.test(Rate ~ Temperature, data = d)
+my_anova_temp
+
+my_anova_species <- kruskal.test(Rate ~ Specie, data = d)
+my_anova_species
+``` 
+```{r}
+resultado_temp <- dunn.test(d$Rate, d$Temperature, method = "BH", table = FALSE)
+
+# Extraer los nombres de los grupos comparados
+comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado_temp$comparisons, " - ")))
+
+# Extraer los p-values ajustados
+pvalues <- resultado_temp$P.adjusted
+
+
+# Crear un data frame con los resultados
+tabla_resultados_temp <- data.frame(
+  Grupo1 = comparaciones$V1,
+  Grupo2 = comparaciones$V2,
+  P_value = pvalues
+)
+tabla_resultados_temp
+
+resultado_species <- dunn.test(d$Rate, d$Specie, method = "BH", table = FALSE)
+
+# Extraer los nombres de los grupos comparados
+comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado_species$comparisons, " - ")))
+
+# Extraer los p-values ajustados
+pvalues <- resultado_species$P.adjusted
+
+
+# Crear un data frame con los resultados
+tabla_resultados_species <- data.frame(
+  Grupo1 = comparaciones$V1,
+  Grupo2 = comparaciones$V2,
+  P_value = pvalues
+)
+tabla_resultados_species
+```
+**Thermal parameters analysis**
+
+**Loading data**
+```{r}
+file_path <- file.path(input_dir, "Thermal_parameters.txt")
+data <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+data$Specie <- ordered(data$Specie, levels = c("SE", "SU", "SA", "SK", "SJ","SM","SP","SC"))
+head(data)
+```
+
+Overlapping of confidence intervals of thermal parameters
+
+```{r}
+# Tamaño de muestra y grados de libertad
+n <- 3
+df <- n - 1
+
+# Nivel de confianza del 95%
+confidence_level <- 0.95
+t_value <- qt(1 - (1 - confidence_level) / 2, df)
+
+# Calcular los intervalos de confianza
+data$rmax_ci_lower <- data$rmax_mean - t_value * data$rmax_se
+data$rmax_ci_upper <- data$rmax_mean + t_value * data$rmax_se
+
+data$topt_ci_lower <- data$topt_mean - t_value * data$topt_se
+data$topt_ci_upper <- data$topt_mean + t_value * data$topt_se
+
+data$ctmin_ci_lower <- data$ctmin_mean - t_value * data$ctmin_se
+data$ctmin_ci_upper <- data$ctmin_mean + t_value * data$ctmin_se
+
+data$ctmax_ci_lower <- data$ctmax_mean - t_value * data$ctmax_se
+data$ctmax_ci_upper <- data$ctmax_mean + t_value * data$ctmax_se
+
+head(data)
+
+write.table(data, file = "TPC_CI.txt", quote = FALSE, row.names = FALSE)
+
+SE_opt <- data %>% filter(Specie == "SC") %>% select(Strain, ctmax_ci_lower, ctmax_ci_upper)
+
+# Crear una función para verificar el solapamiento de intervalos
+check_overlap <- function(lower1, upper1, lower2, upper2) {
+  return(!(upper1 < lower2 || upper2 < lower1))
+}
+
+# Inicializar una lista para almacenar los resultados de los pares comparados
+pairwise_comparison <- data.frame(
+  Strain1 = character(),
+  Strain2 = character(),
+  Overlap = logical(),
+  stringsAsFactors = FALSE
+)
+
+# Comparar cada cepa con todas las demás
+for (i in 1:(nrow(SE_opt)-1)) {
+  for (j in (i+1):nrow(SE_opt)) {
+    overlap <- check_overlap(SE_opt$ctmax_ci_lower[i], SE_opt$ctmax_ci_upper[i], 
+                             SE_opt$ctmax_ci_lower[j], SE_opt$ctmax_ci_upper[j])
+    pairwise_comparison <- rbind(pairwise_comparison, data.frame(
+      Strain1 = SE_opt$Strain[i],
+      Strain2 = SE_opt$Strain[j],
+      Overlap = overlap
+    ))
+  }
+}
+
+# Mostrar los resultados de los pares comparados
+print(pairwise_comparison)
+```
+
+Finally, we evaluated statistical differences between species for each thermal parameter using Kruskal Wallis rank sum test and Dunn's test with Benjamini-Hochberg correction for multiple pairwise comparisons for thermal parameters.
+
+**Loading data**
+```{r}
+file_path <- file.path(input_dir, "Thermal_performance.txt")
+data <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+data$Specie <- ordered(data$Specie, levels = c("SE", "SU", "SA", "SK", "SJ","SM","SP","SC"))
+head(data)
+```
+
+Kruskal Wallis test
+
+```{r}
+my_anova_rmax <- kruskal.test(rmax ~ Specie, data = data)
+my_anova_topt <- kruskal.test(topt ~ Specie, data = data)
+my_anova_ctmin <- kruskal.test(ctmin ~ Specie, data = data)
+my_anova_ctmax <- kruskal.test(ctmax ~ Specie, data = data)
+my_anova_thermal <- kruskal.test(thermal_tolerance ~ Specie, data = data)
+my_anova_breadth <- kruskal.test(breadth ~ Specie, data = data)
+
+(my_anova_rmax)
+(my_anova_topt)
+(my_anova_ctmin)
+(my_anova_ctmax)
+(my_anova_thermal)
+(my_anova_breadth)
+```
+
+Dunn's test
+
+```{r}
+# Lista de parámetros a analizar
+parametros <- c("rmax", "topt", "ctmin", "ctmax", "thermal_tolerance", "breadth")
+
+# Lista para guardar los resultados
+lista_resultados <- list()
+
+# Loop para cada parámetro
+for (param in parametros) {
+  resultado <- dunn.test(data[[param]], data$Specie, method = "BH", table = FALSE)
+  
+  # Extraer los nombres de los grupos comparados
+  comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+  
+  # Extraer los p-values ajustados
+  pvalues <- resultado$P.adjusted
+  
+  # Crear un data frame con los resultados
+  tabla_resultados <- data.frame(
+    Grupo1 = comparaciones$V1,
+    Grupo2 = comparaciones$V2,
+    P_value = pvalues
+  )
+  
+  # Guardar el resultado en la lista
+  lista_resultados[[param]] <- tabla_resultados
+}
+
+lista_resultados$rmax
+lista_resultados$topt
+lista_resultados$ctmin
+lista_resultados$ctmax
+lista_resultados$thermal_tolerance
+lista_resultados$breadth
+
+```
+
+**SECTION 2**
+
+```{r}
+output_dir <- "../results/Section2/"
+input_dir <- "../data/Section2"
+```
+
+**Loading data**
+```{r}
+file_path <- file.path(input_dir, "Kinetic_parameters.txt")
+datos <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+datos$Species <- ordered(datos$Species, levels = c("SE", "SU", "SA", "SK", "SJ","SM","SP","SC"))
+head(datos)
+```
+
+To test the effects of temperature and evolution condition on relative fitness, we performed a generalized linear mixed model with Student-t distribution, including as random effects strains and species.
+
+```{r}
+reduced_model <- glmmTMB(Rate_fitness ~ 1 + (1|Species/Highlight), family = t_family(link = "identity"), data = datos)
+null_model1 <- glmmTMB(Rate_fitness ~ Condition + (1|Species/Highlight), family = t_family(link = "identity"), data = datos)
+null_model2 <- glmmTMB(Rate_fitness ~ Temperature + (1|Species/Highlight), family = t_family(link = "identity"), data = datos)
+full_model3 <- glmmTMB(Rate_fitness ~ Temperature+Condition + (1|Species/Highlight), family = t_family(link = "identity"), data = datos)
+full_model7 <- glmmTMB(Rate_fitness ~ Temperature*Condition + (1|Species/Highlight), 
+                       family = t_family(link = "identity"), data = datos)
+
+anova(reduced_model, null_model1, null_model2,full_model3,full_model7)
+
+summary(full_model7)
+
+# Extraer los componentes de varianza
+var_comp <- insight::get_variance(full_model7)
+
+print(var_comp)
+
+var_specie <- var_comp$var.intercept["Species"]
+var_strain <- var_comp$var.intercept["Highlight:Species"]
+var_residual <- var_comp$var.residual
+var_total <- var_specie + var_strain + var_residual  # Sumar todas las varianzas
+
+# Calcular el porcentaje de varianza explicada
+var_specie_pct <- (var_specie / var_total) * 100
+var_strain_pct <- (var_strain / var_total) * 100
+```
+We evaluated the model assumptions
+
+```{r}
+hurdle_full <- glmmTMB(Rate_fitness ~ Temperature*Condition + (1|Species/Highlight), 
+                       family = t_family(link = "identity"), data = datos)
+
+
+# Residuos
+sim_res <- simulateResiduals(hurdle_full)
+plot(sim_res)
+
+# Heterocidad de la varianza
+plot(fitted(hurdle_full), residuals(hurdle_full))
+
+# Estructura de correlación dentro de los niveles aleatorios
+VarCorr(hurdle_full)
+```
+We then applyed Kruskal Wallis rank sum tests and Dunn's test for relative fitness
+
+```{r}
+my_anova <- kruskal.test(Rate_fitness ~ Condition, data = datos)
+my_anova
+
+resultado <- dunn.test(datos$Rate_fitness, datos$Condition, method = "BH", table = FALSE)
+
+# Extraer los nombres de los grupos comparados
+comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+
+# Extraer los p-values ajustados
+pvalues <- resultado$P.adjusted
+
+# Crear un data frame con los resultados
+tabla_resultados <- data.frame(
+  Grupo1 = comparaciones$V1,
+  Grupo2 = comparaciones$V2,
+  P_value = pvalues
+)
+
+tabla_resultados 
+
+my_anova_temp <- kruskal.test(Rate_fitness ~ Temperature, data = datos)
+my_anova_temp
+```
+We also evaluated the relative fitness per temperature.
+
+```{r}
+datos_25 <- datos %>% filter(Temperature == "Control")
+datos_treat <- datos %>% filter(Temperature == "Treatment")
+
+my_anova_25_species <- kruskal.test(Rate_fitness ~ Species, data = datos_25)
+my_anova_25_species
+my_anova_25_condition <- kruskal.test(Rate_fitness ~ Condition, data = datos_25)
+my_anova_25_condition
+my_anova_treat_species <- kruskal.test(Rate_fitness ~ Species, data = datos_treat)
+my_anova_treat_species
+my_anova_treat_condition <- kruskal.test(Rate_fitness ~ Condition, data = datos_treat)
+my_anova_treat_condition
+```
+
+```{r}
+resultado_25 <- dunn.test(datos_25$Rate_fitness, datos_25$Condition, method = "BH", table = FALSE)
+
+# Extraer los nombres de los grupos comparados
+comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado_25$comparisons, " - ")))
+
+# Extraer los p-values ajustados
+pvalues <- resultado_25$P.adjusted
+
+# Crear un data frame con los resultados
+tabla_resultados_25 <- data.frame(
+  Grupo1 = comparaciones$V1,
+  Grupo2 = comparaciones$V2,
+  P_value = pvalues
+)
+
+tabla_resultados_25 
+
+resultado_treat <- dunn.test(datos_treat$Rate_fitness, datos_treat$Condition, method = "BH", table = FALSE)
+
+# Extraer los nombres de los grupos comparados
+comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado_treat$comparisons, " - ")))
+
+# Extraer los p-values ajustados
+pvalues <- resultado_treat$P.adjusted
+
+# Crear un data frame con los resultados
+tabla_resultados_treat <- data.frame(
+  Grupo1 = comparaciones$V1,
+  Grupo2 = comparaciones$V2,
+  P_value = pvalues
+)
+
+tabla_resultados_treat 
+```
+Then, we evaluated the relative fitness per species.
+
+```{r}
+d_SE <- datos %>% filter(Species == "SE") %>% filter(Temperature == "Treatment")
+d_SU <- datos %>% filter(Species == "SU") %>% filter(Temperature == "Treatment")
+d_SA <- datos %>% filter(Species == "SA") %>% filter(Temperature == "Treatment")
+d_SK <- datos %>% filter(Species == "SK") %>% filter(Temperature == "Treatment")
+d_SM <- datos %>% filter(Species == "SM") %>% filter(Temperature == "Treatment")
+d_SJ <- datos %>% filter(Species == "SJ") %>% filter(Temperature == "Treatment")
+d_SP <- datos %>% filter(Species == "SP") %>% filter(Temperature == "Treatment")
+d_SC <- datos %>% filter(Species == "SC") %>% filter(Temperature == "Treatment")
+
+my_anova_SE <- kruskal.test(Rate_fitness ~ Condition, data = d_SE)
+my_anova_SU <- kruskal.test(Rate_fitness ~ Condition, data = d_SU)
+my_anova_SA <- kruskal.test(Rate_fitness ~ Condition, data = d_SA)
+my_anova_SK <- kruskal.test(Rate_fitness ~ Condition, data = d_SK)
+my_anova_SJ <- kruskal.test(Rate_fitness ~ Condition, data = d_SJ)
+my_anova_SM <- kruskal.test(Rate_fitness ~ Condition, data = d_SM)
+my_anova_SP <- kruskal.test(Rate_fitness ~ Condition, data = d_SP)
+my_anova_SC <- kruskal.test(Rate_fitness ~ Condition, data = d_SC)
+
+my_anova_SE
+my_anova_SU
+my_anova_SA
+my_anova_SK
+my_anova_SJ
+my_anova_SM
+my_anova_SP
+my_anova_SC
+```
+```{r}
+d_SE_25 <- datos %>% filter(Species == "SE") %>% filter(Temperature == "Control")
+d_SU_25 <- datos %>% filter(Species == "SU") %>% filter(Temperature == "Control")
+d_SA_25 <- datos %>% filter(Species == "SA") %>% filter(Temperature == "Control")
+d_SK_25 <- datos %>% filter(Species == "SK") %>% filter(Temperature == "Control")
+d_SM_25 <- datos %>% filter(Species == "SM") %>% filter(Temperature == "Control")
+d_SJ_25 <- datos %>% filter(Species == "SJ") %>% filter(Temperature == "Control")
+d_SP_25 <- datos %>% filter(Species == "SP") %>% filter(Temperature == "Control")
+d_SC_25 <- datos %>% filter(Species == "SC") %>% filter(Temperature == "Control")
+
+my_anova_SE <- kruskal.test(Rate_fitness ~ Condition, data = d_SE_25)
+my_anova_SU <- kruskal.test(Rate_fitness ~ Condition, data = d_SU_25)
+my_anova_SA <- kruskal.test(Rate_fitness ~ Condition, data = d_SA_25)
+my_anova_SK <- kruskal.test(Rate_fitness ~ Condition, data = d_SK_25)
+my_anova_SJ <- kruskal.test(Rate_fitness ~ Condition, data = d_SJ_25)
+my_anova_SM <- kruskal.test(Rate_fitness ~ Condition, data = d_SM_25)
+my_anova_SP <- kruskal.test(Rate_fitness ~ Condition, data = d_SP_25)
+my_anova_SC <- kruskal.test(Rate_fitness ~ Condition, data = d_SC_25)
+
+my_anova_SE
+my_anova_SU
+my_anova_SA
+my_anova_SK
+my_anova_SJ
+my_anova_SM
+my_anova_SP
+my_anova_SC
+```
+```{r}
+
+# Lista de nombres de especies
+especies <- c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC")  # ajusta según tus especies
+
+# Lista para guardar los resultados por especie
+resultados_dunn_fitness <- list()
+
+# Loop por especie
+for (especie in especies) {
+  df <- get(paste0("d_", especie))  # obtener el data frame de esa especie
+  
+  # Ejecutar dunn.test entre condiciones usando Rate_fitness
+  resultado <- dunn.test(df$Rate_fitness, df$Condition, method = "BH", table = FALSE)
+  
+  # Extraer comparaciones y p-values
+  comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+  pvalues <- resultado$P.adjusted
+  
+  # Crear tabla con los resultados
+  tabla_resultados <- data.frame(
+    Especie = especie,
+    Grupo1 = comparaciones$V1,
+    Grupo2 = comparaciones$V2,
+    P_value = pvalues
+  )
+  
+  # Guardar la tabla en la lista
+  resultados_dunn_fitness[[especie]] <- tabla_resultados
+}
+
+resultados_dunn_fitness$SE
+resultados_dunn_fitness$SU
+resultados_dunn_fitness$SA
+resultados_dunn_fitness$SK
+resultados_dunn_fitness$SJ
+resultados_dunn_fitness$SM
+resultados_dunn_fitness$SP
+resultados_dunn_fitness$SC
+
+```
+```{r}
+
+# Lista de nombres de especies
+especies <- c("SE_25", "SU_25", "SA_25", "SK_25", "SJ_25", "SM_25", "SP_25", "SC_25")  # ajusta según tus especies
+
+# Lista para guardar los resultados por especie
+resultados_dunn_fitness <- list()
+
+# Loop por especie
+for (especie in especies) {
+  df <- get(paste0("d_", especie))  # obtener el data frame de esa especie
+  
+  # Ejecutar dunn.test entre condiciones usando Rate_fitness
+  resultado <- dunn.test(df$Rate_fitness, df$Condition, method = "BH", table = FALSE)
+  
+  # Extraer comparaciones y p-values
+  comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+  pvalues <- resultado$P.adjusted
+  
+  # Crear tabla con los resultados
+  tabla_resultados <- data.frame(
+    Especie = especie,
+    Grupo1 = comparaciones$V1,
+    Grupo2 = comparaciones$V2,
+    P_value = pvalues
+  )
+  
+  # Guardar la tabla en la lista
+  resultados_dunn_fitness[[especie]] <- tabla_resultados
+}
+
+resultados_dunn_fitness$SE
+resultados_dunn_fitness$SU
+resultados_dunn_fitness$SA
+resultados_dunn_fitness$SK
+resultados_dunn_fitness$SJ
+resultados_dunn_fitness$SM
+resultados_dunn_fitness$SP
+resultados_dunn_fitness$SC
+
+```
+Dunn's test for relative fitness in each strain and temperature
+
+```{r}
+# Lista de especies y temperaturas
+especies <- c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC")
+temperaturas <- c("Treatment", "Control")
+
+# Lista para guardar todos los resultados
+resultados_cepas <- list()
+
+# Loop por especie
+for (especie in especies) {
+  
+  # Loop por temperatura
+  for (temp in temperaturas) {
+    
+    # Filtrar por especie y temperatura
+    datos_filtrados_temp <- datos %>%
+      filter(Species == especie, Temperature == temp)
+    
+    # Obtener cepas únicas dentro de esa especie y temperatura
+    cepas <- unique(datos_filtrados_temp$Strain_2)
+    
+    # Loop por cepa
+    for (cepa in cepas) {
+      
+      # Filtrar por cepa
+      datos_cepa <- datos_filtrados_temp %>% filter(Strain_2 == cepa)
+      
+      # Saltar si no hay al menos 2 condiciones
+      if (length(unique(datos_cepa$Condition)) < 2) next
+      
+      # Ejecutar Dunn test
+      resultado <- dunn.test(datos_cepa$Rate_fitness, datos_cepa$Condition, method = "holm", table = FALSE)
+      
+      # Extraer resultados
+      comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+      pvalues <- resultado$P.adjusted
+      
+      # Crear tabla
+      tabla_resultados <- data.frame(
+        Especie = especie,
+        Cepa = cepa,
+        Temperatura = temp,
+        Grupo1 = comparaciones$V1,
+        Grupo2 = comparaciones$V2,
+        P_value = pvalues
+      )
+      
+      # Guardar con nombre único
+      nombre <- paste(especie, "cepa", cepa, temp, sep = "_")
+      resultados_cepas[[nombre]] <- tabla_resultados
+    }
+  }
+}
+
+# Combinar todos los resultados en una tabla
+resultados_combinados <- do.call(rbind, resultados_cepas)
+
+# Ver los primeros resultados
+head(resultados_combinados)
+
+```
+Finally, analysis by evolved population.
+
+```{r}
+library(dplyr)
+
+# Lista de especies
+especies <- c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC")
+
+# Temperaturas a considerar
+temperaturas <- c("Control", "Treatment")
+
+# Condiciones a comparar: ancestral vs las otras
+condiciones_comparar <- c("Ancestral", "Control", "Treatment")
+
+# Lista para guardar resultados
+kruskal_resultados <- list()
+
+# Loop por especie
+for (especie in especies) {
+  
+  # Obtener cepas únicas de esa especie
+  cepas <- unique(datos %>% filter(Species == especie) %>% pull(Strain_2))
+  
+  for (cepa in cepas) {
+    
+    for (temp in temperaturas) {
+      
+      for (cond in c("Control", "Treatment")) {  # Comparaciones contra Ancestral
+        
+        # Filtrar datos para Ancestral y la condición correspondiente
+        datos_filtrados <- datos %>%
+          filter(Species == especie,
+                 Strain_2 == cepa,
+                 Temperature == temp,
+                 Condition %in% c("Ancestral", cond))
+        
+        # Continuar solo si hay al menos dos grupos en Line.1
+        if (length(unique(datos_filtrados$Line.1)) < 2) next
+        
+        # Ejecutar Kruskal-Wallis
+        kruskal_res <- kruskal.test(Rate_fitness ~ Line.1, data = datos_filtrados)
+        
+        # Guardar con nombre descriptivo
+        nombre <- paste(especie, "cepa", cepa, temp, "Ancestral_vs", cond, sep = "_")
+        kruskal_resultados[[nombre]] <- kruskal_res
+      }
+    }
+  }
+}
+
+kruskal_resultados
+
+```
+
+```{r}
+
+# Parámetros
+especies <- c("SE", "SU", "SA", "SK", "SJ", "SM", "SP", "SC")
+temperaturas <- c("Control", "Treatment")
+comparaciones <- c("Control", "Treatment")
+
+# Lista para guardar los resultados
+dunn_resultados <- list()
+
+for (especie in especies) {
+  
+  cepas <- unique(datos %>% filter(Species == especie) %>% pull(Strain_2))
+  
+  for (cepa in cepas) {
+    
+    for (temp in temperaturas) {
+      
+      for (cond in comparaciones) {
+        
+        # Filtrar datos para la comparación
+        datos_filtrados <- datos %>%
+          filter(Species == especie,
+                 Strain_2 == cepa,
+                 Temperature == temp,
+                 Condition %in% c("Ancestral", cond))
+        
+        # Continuar sólo si hay al menos 2 grupos distintos en Line.1
+        if (length(unique(datos_filtrados$Line.1)) < 2) next
+        
+        # Aplicar test de Dunn
+        resultado_dunn <- dunn.test(
+          datos_filtrados$Rate_fitness,
+          datos_filtrados$Line.1,
+          method = "BH",
+          table = FALSE
+        )
+        
+        # Extraer nombres de grupos comparados
+        comparaciones_dunn <- as.data.frame(do.call(rbind, strsplit(resultado_dunn$comparisons, " - ")))
+        
+        # Crear tabla con resultados
+        tabla <- data.frame(
+          Grupo1 = comparaciones_dunn$V1,
+          Grupo2 = comparaciones_dunn$V2,
+          P_value = resultado_dunn$P.adjusted
+        )
+        
+        # Guardar con nombre identificador
+        nombre <- paste(especie, "cepa", cepa, temp, "Ancestral_vs", cond, sep = "_")
+        dunn_resultados[[nombre]] <- tabla
+      }
+    }
+  }
+}
+
+head(dunn_resultados)
+```
+
+
+**SECTION 3**
+
+```{r}
+output_dir <- "../results/Section3/"
+input_dir <- "../data/Section3"
+```
+
+**Loading data**
+```{r}
+file_path <- file.path(input_dir, "Kinetic_parameters_ind.txt")
+d <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+head(d)
+
+d2 <- d %>% filter(Highlight.1 != "SK1-4_Control_I3",Highlight.1 != "SK1-1_Control_I2",Highlight.1 != "SK1-2_Control_I2",
+                   Highlight.1 != "SK2-1_Control_I1",Highlight.1 != "SK2-2_Treatment_I1",Highlight.1 != "SP1-3_Treatment_I3") 
+head(d2)
+```
+
+First, we analyzed genotypes growth rates between conditions
+
+```{r}
+my_anova <- kruskal.test(Rate ~ Specie, data = d2)
+my_anova
+
+my_anova2 <- kruskal.test(Rate ~ Condition, data = d2)
+my_anova2
+
+resultado <- dunn.test(d2$Rate, d2$Condition, method = "BH", table = FALSE)
+
+# Extraer los nombres de los grupos comparados
+comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+
+# Extraer los p-values ajustados
+pvalues <- resultado$P.adjusted
+
+# Crear un data frame con los resultados
+tabla_resultados <- data.frame(
+  Grupo1 = comparaciones$V1,
+  Grupo2 = comparaciones$V2,
+  P_value = pvalues
+)
+
+tabla_resultados
+```
+Then, generalized linear mixed model with Student-t distribution to test the effects of temperature and evolution condition on growth rate at differents temperatures. Model included random effects of strains and species.
+
+```{r}
+reduced_model <- glmmTMB(Rate ~ 1 + (1|Specie/Strain2), family = t_family(link = "identity"), data = d2)
+null_model1 <- glmmTMB(Rate ~ Condition + (1|Specie/Strain2), family = t_family(link = "identity"), data = d2)
+null_model2 <- glmmTMB(Rate ~ Temperature + (1|Specie/Strain2), family = t_family(link = "identity"), data = d2)
+full_model3 <- glmmTMB(Rate ~ Temperature+Condition + (1|Specie/Strain2), family = t_family(link = "identity"), data = d2)
+full_model7 <- glmmTMB(Rate ~ Temperature*Condition + (1|Specie/Strain2), 
+                       family = t_family(link = "identity"), data = d2)
+
+anova(reduced_model, null_model1, null_model2,full_model3,full_model7)
+
+summary(full_model7)
+
+# Extraer los componentes de varianza
+var_comp <- insight::get_variance(full_model7)
+
+print(var_comp)
+
+var_specie <- var_comp$var.intercept["Specie"]
+var_strain <- var_comp$var.intercept["Strain2:Specie"]
+var_residual <- var_comp$var.residual
+var_total <- var_specie + var_strain + var_residual  # Sumar todas las varianzas
+
+# Calcular el porcentaje de varianza explicada
+var_specie_pct <- (var_specie / var_total) * 100
+var_strain_pct <- (var_strain / var_total) * 100
+
+```
+Checking assumptions
+
+```{r}
+hurdle_full <- glmmTMB(Rate ~ Temperature*Condition + (1|Specie/Strain2), 
+                       family = t_family(link = "identity"), data = d2)
+
+
+# Residuos
+sim_res <- simulateResiduals(hurdle_full)
+plot(sim_res)
+
+# Heterocidad de la varianza
+plot(fitted(hurdle_full), residuals(hurdle_full))
+
+# Estructura de correlación dentro de los niveles aleatorios
+VarCorr(hurdle_full)
+```
+
+Analysis of thermal parameters
+
+**Loading data**
+```{r}
+file_path <- file.path(input_dir, "thermal_parameters_rel.txt")
+param_rel <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+head(param_rel)
+```
+
+Kruskal Wallis rank sum test
+
+```{r}
+my_anova_topt <- kruskal.test(topt_rel ~ Condition, data = param_rel)
+my_anova_rmax <- kruskal.test(rmax_rel ~ Condition, data = param_rel)
+my_anova_ctmax<- kruskal.test(ctmax_rel ~ Condition, data = param_rel)
+my_anova_ctmin<- kruskal.test(ctmin_rel ~ Condition, data = param_rel)
+my_anova_tolerance <- kruskal.test(tolerance_rel ~ Condition, data = param_rel)
+my_anova_breadth <- kruskal.test(breadth_rel ~ Condition, data = param_rel)
+
+my_anova_topt
+my_anova_rmax
+my_anova_ctmax
+my_anova_ctmin
+my_anova_tolerance
+my_anova_breadth 
+```
+
+```{r}
+# Lista de parámetros a analizar
+parametros <- c("rmax_rel", "topt_rel", "ctmin_rel", "ctmax_rel", "tolerance_rel", "breadth_rel")
+
+# Lista para guardar los resultados
+lista_resultados <- list()
+
+# Loop para cada parámetro
+for (param in parametros) {
+  resultado <- dunn.test(param_rel[[param]], param_rel$Condition, method = "BH", table = FALSE)
+  
+  # Extraer los nombres de los grupos comparados
+  comparaciones <- as.data.frame(do.call(rbind, strsplit(resultado$comparisons, " - ")))
+  
+  # Extraer los p-values ajustados
+  pvalues <- resultado$P.adjusted
+  
+  # Crear un data frame con los resultados
+  tabla_resultados <- data.frame(
+    Grupo1 = comparaciones$V1,
+    Grupo2 = comparaciones$V2,
+    P_value = pvalues
+  )
+  
+  # Guardar el resultado en la lista
+  lista_resultados[[param]] <- tabla_resultados
+}
+
+lista_resultados$rmax_rel
+lista_resultados$topt_rel
+lista_resultados$ctmin_rel
+lista_resultados$ctmax_rel
+lista_resultados$tolerance_rel
+lista_resultados$breadth_rel
+```
+Spearman correlations
+
+```{r}
+library(dplyr)
+
+# Comparaciones que quieres realizar
+comparaciones <- list(
+  c("topt_rel", "rmax_rel"),
+  c("topt_rel", "tolerance_rel"),
+  c("topt_rel", "ctmax_rel"),
+  c("rmax_rel", "ctmax_rel"),
+  c("topt_rel", "breadth_rel"),
+  c("rmax_rel", "breadth_rel"),
+  c("ctmax_rel", "ctmin_rel")
+)
+
+# Condiciones a comparar
+condiciones <- c("Control", "Treatment")
+
+# Lista para guardar resultados
+correlaciones <- list()
+
+# Loop por condición y por cada par de parámetros
+for (cond in condiciones) {
+  
+  datos_filt <- param_rel %>% filter(Condition == cond)
+  
+  for (par in comparaciones) {
+    x <- par[1]
+    y <- par[2]
+    
+    # Filtrar datos con valores no NA en ambas columnas
+    datos_par <- datos_filt %>% filter(!is.na(.data[[x]]), !is.na(.data[[y]]))
+    
+    # Realizar test de correlación
+    res <- cor.test(datos_par[[x]], datos_par[[y]], method = "spearman")
+    
+    # Guardar resultados con nombre identificador
+    nombre <- paste(cond, x, "vs", y, sep = "_")
+    correlaciones[[nombre]] <- list(
+      parametro_1 = x,
+      parametro_2 = y,
+      condicion = cond,
+      rho = res$estimate,
+      p_value = res$p.value,
+      metodo = res$method
+    )
+  }
+}
+
+# Convertir la lista en data frame
+tabla_correlaciones <- do.call(rbind, lapply(names(correlaciones), function(nombre) {
+  res <- correlaciones[[nombre]]
+  data.frame(
+    Comparacion = nombre,
+    Condicion = res$condicion,
+    Parametro_1 = res$parametro_1,
+    Parametro_2 = res$parametro_2,
+    Rho = res$rho,
+    P_value = res$p_value,
+    Metodo = res$metodo,
+    stringsAsFactors = FALSE
+  )
+}))
+
+# Mostrar la tabla en consola
+print(tabla_correlaciones)
+
+```
+
+
+```{r}
+file_path <- file.path(input_dir, "param_rel_final.txt")
+param_rel <- read.table(file_path, header = TRUE, stringsAsFactors = FALSE)
+head(param_rel)
+
+param_rel_filt <- param_rel %>% filter(Condition == "Treatment", Species %in% c("Se","Su","Sk","Sm"))
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$rmax_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$tolerance_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$ctmax_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$rmax_rel, param_rel_filt$ctmax_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$breadth_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$rmax_rel, param_rel_filt$breadth_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$ctmax_rel, param_rel_filt$ctmin_rel,  method = "spearman")
+res2
+```
+```{r}
+param_rel_filt <- param_rel %>% filter(Condition == "Treatment", Species %in% c("Sa","Sj","Sp","Sc"))
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$rmax_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$tolerance_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$ctmax_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$rmax_rel, param_rel_filt$ctmax_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$topt_rel, param_rel_filt$breadth_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$rmax_rel, param_rel_filt$breadth_rel,  method = "spearman")
+res2
+
+res2 <-cor.test(param_rel_filt$ctmax_rel, param_rel_filt$ctmin_rel,  method = "spearman")
+res2
+```
+
+
+
+

@@ -19,7 +19,9 @@ library(ggplot2)
 library("FactoMineR")
 suppressMessages(library("factoextra"))
 library(reshape2)
-library(lme4)
+library(glmmTMB)
+library(performance)
+suppressMessages(library(DHARMa))
 ```
 
 **Directories**
@@ -190,28 +192,51 @@ We observed three main clusters with most strains of S. cerevisiae, S. paradoxus
 Linear mixed models indicated significant effect of temperature on growth rate and interspecies variability, which was more important in explaining differences in growth rate than between strains within species.
 
 ```{r}
-anova_model <- lmer(Rate ~ Temperature + (1 | Specie/Strain), data = d,REML = FALSE)
-anova_model_no_random <- lm(Rate ~ Temperature, data = d)
-anova_model_random <- lmer(Rate ~ 1 + (1 | Specie/Strain), data = d, REML = FALSE)
-anova(anova_model, anova_model_no_random, anova_model_random)
+d2 <- d %>% mutate(LogRate = sqrt(Rate))
+d4 <- d2 %>% filter(Specie != "SA") 
+hurdle_full <- glmmTMB(LogRate ~ Temperature + (1 | Specie/Strain), 
+                       family = ziGamma(link = "inverse"), zi = ~ Temperature, data = d2)
 
-anova_model <- lmer(Rate ~ Temperature + (1 | Specie/Strain), data = d)
-summary(anova_model)
+hurdle_no_random <- glmmTMB(LogRate ~ Temperature, 
+                            family = ziGamma(link = "log"), zi = ~ Temperature, data = d2)
+
+hurdle_random <- glmmTMB(LogRate ~ 1 + (1 | Specie/Strain), 
+                         family = ziGamma(link = "inverse"), zi = ~ Temperature, data = d2)
+
+anova(hurdle_full, hurdle_no_random, hurdle_random)
+
+summary(hurdle_full)
 ```
 
 ```{r}
-null_model3 <- lmer(Rate ~ Temperature + (1|Specie/Strain), data = d)
-summary(null_model3)
+#Residuos
+sim_res <- simulateResiduals(hurdle_full)
+plot(sim_res)
+
+
+# Autocorrelation and independence of residuals
+sim_res_grouped <- recalculateResiduals(sim_res, group = d$Temperature)
+testTemporalAutocorrelation(sim_res_grouped, time = unique(d$Temperature))
+
+#Overfitting
+simulationOutput <- simulateResiduals(fittedModel = hurdle_full)
+testDispersion(simulationOutput)
 ```
 
 ```{r}
-var_comp <- as.data.frame(VarCorr(null_model4))
+var_comp <- insight::get_variance(hurdle_full)
 
-var_total <- sum(var_comp$vcov)
-prop_var_especie <- var_comp$vcov[2] / var_total
-prop_var_cepa <- var_comp$vcov[1] / var_total
+print(var_comp)
 
-print(paste("Variance ratio between species:", prop_var_especie))
-print(paste("Proportion of variance between strains within species:", prop_var_cepa))
+var_specie <- var_comp$var.intercept["Specie"]
+var_strain <- var_comp$var.intercept["Strain:Specie"]
+var_residual <- var_comp$var.residual
+var_total <- var_specie + var_strain + var_residual  
+
+var_specie_pct <- (var_specie / var_total) * 100
+var_strain_pct <- (var_strain / var_total) * 100
+
+cat("Varianza explicada por la especie:", var_specie_pct, "%\n")
+cat("Varianza explicada por la cepa dentro de especie:", var_strain_pct, "%\n")
 ```
 

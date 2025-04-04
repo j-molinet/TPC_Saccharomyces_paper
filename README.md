@@ -34,5 +34,6 @@ Figure S1
 - `Section1_2.R`: Scripts used to obtain thermal performance curves and thermal parameters.
 - `Section2.R`: Scripts used to evaluate relative fitness between evolved and ancestral strains.
 - `Section3.R`: Scripts used to obtain thermal performance curves and thermal parameters of evolved genotypes.
+- `Statistical_analysys`: Scripts used to performance statistical analysis.
 - `data/`: Folder containing the data files used for testing.
 - `results/`: Folder with the results generated.
